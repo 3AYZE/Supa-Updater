@@ -1,0 +1,3 @@
+# Windows release checks
+
+After downloading a build, verify that the UI opens without a console. Navigate between all six sidebar pages in Light and Dark modes. Scan apps and drivers and confirm that zero-update states are visible. Confirm Select all, Clear selection, Update selected and Update all controls. Test one WinGet update, compare its new version, check Activity results, and then test an optional driver on a noncritical test machine. Do not test driver installation on production hardware without a recovery plan. Confirm App updates reads the latest release and source self-update can restart the app. The EXE should open the release page instead of attempting a source-only helper.
