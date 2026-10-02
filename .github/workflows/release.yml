@@ -3,17 +3,7 @@ name: Build and publish release
 on:
   push:
     branches: [main]
-    paths:
-      - 'app.pyw'
-      - 'engine.py'
-      - 'driver_scan.py'
-      - 'windows_updates.py'
-      - 'self_update.py'
-      - 'update_helper.py'
-      - 'storage.py'
-      - 'version.json'
-      - 'tests/**'
-      - '.github/workflows/release.yml'
+    paths: ['app.pyw','engine.py','driver_scan.py','windows_updates.py','self_update.py','update_helper.py','storage.py','version.json','assets/**','tests/**','.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
@@ -24,26 +14,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare initial source import
-        shell: pwsh
-        run: |
-          if (Test-Path bootstrap.py) {
-            python bootstrap.py
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git config user.name 'github-actions[bot]'
-            git add -A
-            git commit -m 'Import cleaned SupaUpdater v1.3.0 source'
-            git push origin HEAD:main
-          }
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Prepare icon assets
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pillow cairosvg
+          python -c "import cairosvg; cairosvg.svg2png(url='assets/SupaUpdater.svg',write_to='assets/SupaUpdater.png',output_width=1024,output_height=1024)"
+          python -c "from PIL import Image; im=Image.open('assets/SupaUpdater.png').convert('RGBA'); im.save('assets/SupaUpdater.ico',format='ICO',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
       - name: Run tests
         run: python -m unittest discover -s tests -v
       - name: Build Windows executable
         run: |
           python -m pip install --disable-pip-version-check "pyinstaller>=6.10,<7"
-          python -m PyInstaller --onefile --windowed --clean --noupx --name SupaUpdater app.pyw
+          python -m PyInstaller --onefile --windowed --clean --noupx --name SupaUpdater --icon assets/SupaUpdater.ico --add-data "assets/SupaUpdater.ico;assets" --add-data "assets/SupaUpdater.png;assets" app.pyw
+      - name: Build detached update helper
+        run: python -m PyInstaller --onefile --console --clean --noupx --name SupaUpdaterUpdateHelper update_helper.py
       - name: Package source edition
         shell: pwsh
         run: |
@@ -51,6 +38,7 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'SupaUpdater'
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           @('app.pyw','engine.py','driver_scan.py','windows_updates.py','self_update.py','update_helper.py','storage.py','version.json','README.md') | ForEach-Object { Copy-Item $_ $root }
+          Copy-Item 'assets' (Join-Path $root 'assets') -Recurse
           Compress-Archive -Path $root -DestinationPath "SupaUpdater-v$version-source.zip" -Force
       - name: Publish release
         env:
@@ -61,4 +49,4 @@ jobs:
           $tag = "v$version"
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists. Bump version.json for a new release." }
-          gh release create $tag "dist/SupaUpdater.exe" "SupaUpdater-v$version-source.zip" --target "$(git rev-parse HEAD)" --title "SupaUpdater $tag" --notes "Windows software and optional driver updates. Source edition supports confirmed self-updates; portable EXE provides release notifications. Windows tests and build must pass before publication."
+          gh release create $tag "dist/SupaUpdater.exe" "dist/SupaUpdaterUpdateHelper.exe" "SupaUpdater-v$version-source.zip" --target "$(git rev-parse HEAD)" --title "SupaUpdater $tag" --notes "SupaUpdater v$version: redesigned update workflow, GitHub self-update support, and new Fluent-inspired Windows icon."
