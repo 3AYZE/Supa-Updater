@@ -133,6 +133,22 @@ class SupaUpdater(tk.Tk):
         self.refresh()
         self.show_nav_colors()
 
+    def uninstall_supaupdater(self):
+        if self.busy or self.self_busy or self.driver_busy or self.driver_scanning:
+            messagebox.showinfo('SupaUpdater is busy','Finish or stop the current operation before uninstalling SupaUpdater.');return
+        if not messagebox.askyesno('Uninstall SupaUpdater','Remove SupaUpdater from this PC?\n\nThis removes the SupaUpdater program files. Your other applications and drivers will not be changed.'):return
+        if not getattr(sys,'frozen',False):
+            messagebox.showinfo('Source edition','This copy is running from source. Delete the extracted SupaUpdater folder to remove it.');return
+        exe=Path(sys.executable).resolve()
+        helper=exe.parent/'SupaUpdaterUpdateHelper.exe'
+        if not helper.is_file():
+            messagebox.showerror('Uninstall unavailable','SupaUpdaterUpdateHelper.exe is missing. Keep it next to SupaUpdater.exe so the running program can remove itself safely.');return
+        try:
+            subprocess.Popen([str(helper),'--uninstall',str(exe),str(os.getpid())],cwd=str(exe.parent),close_fds=True)
+            self.destroy()
+        except Exception as exc:
+            messagebox.showerror('Uninstall failed',str(exc))
+
     def system_theme(self):
         if sys.platform!='win32':return 'Light'
         try:
