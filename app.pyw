@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from storage import load_settings, save_settings, record_result, read_history, HISTORY
 import tkinter as tk
 from tkinter import ttk, messagebox
-from engine import inventory, update_one, uninstall_one, LOG
+from engine import inventory, update_one, LOG
 from driver_scan import scan_drivers
 from windows_updates import find_driver_updates, install_driver_update
 
@@ -68,7 +68,6 @@ class SupaUpdater(tk.Tk):
         self.table.pack(side='left',fill='both',expand=True);y.pack(side='right',fill='y')
         self.table.bind('<Button-1>',self.click_row)
         bottom=tk.Frame(self.main,bg=BG);bottom.pack(fill='x',pady=(10,12),before=container)
-        self.uninstallbtn=tk.Button(bottom,text='Uninstall selected',command=self.uninstall_selected,bg=WHITE,fg='#b42318',relief='solid',bd=1,font=('Segoe UI',10,'bold'),padx=15,pady=10,state='disabled');self.uninstallbtn.pack(side='left')
         self.updatebtn=tk.Button(bottom,text='Install selected (0)',command=self.update_selected,bg=BLUE,fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=19,pady=11,state='disabled');self.updatebtn.pack(side='right')
         self.updateallbtn=tk.Button(bottom,text='Install all available',command=self.update_all,bg='#176e47',fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=11,state='disabled');self.updateallbtn.pack(side='right',padx=(0,9))
         self.cancelbtn=tk.Button(bottom,text='Stop after current update',command=self.cancel,bg=WHITE,fg=TEXT,relief='solid',bd=1,padx=14,pady=10,state='disabled');self.cancelbtn.pack(side='right',padx=9)
@@ -401,7 +400,7 @@ class SupaUpdater(tk.Tk):
 
     def set_busy(self,value):
         self.busy=value;self.scanbtn.config(state='disabled' if value else 'normal');self.cancelbtn.config(state='normal' if value else 'disabled')
-        self.allbtn.config(state='disabled' if value or self.page!='Updates' else 'normal');self.clearbtn.config(state='disabled' if value or self.page!='Updates' else 'normal');self.uninstallbtn.config(state='disabled' if value or not self.selected else 'normal');self.refresh()
+        self.allbtn.config(state='disabled' if value or self.page!='Updates' else 'normal');self.clearbtn.config(state='disabled' if value or self.page!='Updates' else 'normal');self.refresh()
 
     def scan(self):
         if self.busy or self.self_busy or self.driver_busy or self.driver_scanning:return
@@ -409,26 +408,6 @@ class SupaUpdater(tk.Tk):
         def work():
             try:self.events.put(('scan',inventory()))
             except Exception as e:self.events.put(('error',str(e)))
-        threading.Thread(target=work,daemon=True).start()
-
-    def uninstall_selected(self):
-        if self.busy or self.self_busy or self.driver_busy or self.driver_scanning:return
-        apps=[self.updates[k] for k in self.updates if k in self.selected]
-        if not apps:
-            messagebox.showinfo('Select apps','Select one or more apps from the current list first.');return
-        names='\n'.join('• '+a.name for a in apps[:12])
-        if len(apps)>12:names+=f'\n…and {len(apps)-12} more'
-        if not messagebox.askyesno('Confirm uninstall',f'Uninstall {len(apps)} selected app(s)?\n\n{names}\n\nThis removes the applications, not just their updates. App data may also be removed by each app\'s uninstaller.'):return
-        self.set_busy(True);self.queue_total=len(apps);self.queue_completed=0;self.queue_failed=0;self.queue_active=True;self.queue_started=time.monotonic();self.current_started=None;self.queue_results=[]
-        self.progressbar.configure(mode='determinate',value=0)
-        self.progress_title.set(f'Preparing to uninstall {len(apps)} app(s)')
-        def work():
-            for a in apps:
-                self.events.put(('uninstall_start',a.name))
-                try:ok,msg=uninstall_one(a,confirm=True)
-                except Exception as exc:ok,msg=False,f'Unexpected uninstall error: {exc}'
-                self.events.put(('uninstall_result',(a,ok,msg)))
-            self.events.put(('uninstall_done',None))
         threading.Thread(target=work,daemon=True).start()
 
     def update_selected(self):
@@ -572,29 +551,6 @@ class SupaUpdater(tk.Tk):
                     else:
                         self.status.set(f'Scan finished. {len(self.registry)} registry entries; {len(updates)} available updates. {error}')
                     self.set_busy(False)
-                elif kind=='uninstall_start':
-                    self.current_started=time.monotonic()
-                    self.progress_title.set(f'Uninstalling: {data} ({self.queue_completed+1}/{self.queue_total})')
-                    self.progressbar.configure(mode='determinate',value=100*self.queue_completed/max(1,self.queue_total))
-                    self.status.set(f'Uninstalling {data}…')
-                elif kind=='uninstall_result':
-                    a,ok,msg=data
-                    if self.current_started is not None:self.completed_durations.append(time.monotonic()-self.current_started)
-                    self.current_started=None;self.queue_completed+=1
-                    if not ok:self.queue_failed+=1
-                    self.queue_results.append((a.name,ok,msg))
-                    self.progressbar.configure(mode='determinate',value=100*self.queue_completed/max(1,self.queue_total))
-                    self.status.set(f'{a.name}: {msg}')
-                    try:record_result({'time':datetime.now(timezone.utc).isoformat(),'name':a.name,'package_id':a.package_id,'source':a.source,'result':'uninstalled' if ok else 'uninstall failed','message':msg})
-                    except OSError:pass
-                elif kind=='uninstall_done':
-                    self.queue_active=False;self.set_busy(False)
-                    self.progressbar.configure(mode='determinate',value=100)
-                    self.progress_title.set('Uninstall complete')
-                    self.progress_detail.set(f'{self.queue_completed-self.queue_failed}/{self.queue_total} uninstalled successfully  •  {self.queue_failed} failed')
-                    self.show_results()
-                    self.refreshing_after_update=True;self.set_busy(True)
-                    threading.Thread(target=self.rescan_after_update,daemon=True).start()
                 elif kind=='install_start':
                     self.current_started=time.monotonic()
                     self.progress_title.set(f'Installing: {data} ({self.queue_completed+1}/{self.queue_total})')
