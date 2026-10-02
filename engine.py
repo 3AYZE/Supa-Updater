@@ -85,6 +85,30 @@ def winget_updates(timeout=100):
     return rows,''
 
 
+def uninstall_one(app: App, confirm: bool=False, timeout=1800):
+    """Uninstall an exact WinGet-managed package after explicit UI confirmation."""
+    if not confirm:
+        return False, 'Dry run: no changes made.'
+    if not app.package_id or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+\\-]*', app.package_id):
+        return False, 'This app has no verified WinGet package identifier.'
+    exe=winget_path()
+    if not exe:
+        return False, 'WinGet unavailable.'
+    cmd=[exe,'uninstall','--id',app.package_id,'--exact','--disable-interactivity','--accept-source-agreements']
+    if app.source in ('winget','msstore'): cmd.extend(['--source',app.source])
+    logging.info('Starting uninstall: %s source=%s',app.package_id,app.source)
+    try:
+        p=subprocess.run(cmd,capture_output=True,text=True,errors='replace',timeout=timeout,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    except (OSError,subprocess.TimeoutExpired) as exc:
+        logging.exception('Uninstall failed: %s',app.package_id)
+        return False,f'Uninstaller did not finish: {exc}'
+    output=(p.stdout+'\n'+p.stderr).strip()
+    logging.info('Uninstall finished: %s exit=%s output=%s',app.package_id,p.returncode,output[-5000:])
+    if p.returncode:
+        return False,f'Uninstaller returned code {p.returncode}. Check Activity and the log.'
+    return True,'Uninstaller completed successfully.'
+
+
 def inventory():
     """Registry inventory is informational; only WinGet package IDs are installable."""
     registry=registry_apps()
