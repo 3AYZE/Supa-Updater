@@ -20,9 +20,22 @@ jobs:
       - name: Prepare icon assets
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow cairosvg
-          python -c "import cairosvg; cairosvg.svg2png(url='assets/SupaUpdater.svg',write_to='assets/SupaUpdater.png',output_width=1024,output_height=1024)"
-          python -c "from PIL import Image; im=Image.open('assets/SupaUpdater.png').convert('RGBA'); im.save('assets/SupaUpdater.ico',format='ICO',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+          python -m pip install --disable-pip-version-check pillow
+          @'
+          from PIL import Image, ImageDraw
+          from pathlib import Path
+          Path("assets").mkdir(exist_ok=True)
+          s=1024
+          im=Image.new("RGBA",(s,s),(0,0,0,0))
+          d=ImageDraw.Draw(im)
+          d.rounded_rectangle((96,96,928,928),radius=216,fill=(27,105,207,255))
+          d.rounded_rectangle((136,136,888,888),radius=184,fill=(47,154,245,255))
+          d.arc((232,232,792,792),start=40,end=300,fill="white",width=96)
+          d.polygon([(740,208),(880,232),(844,376),(792,312),(712,400),(648,336),(736,252)],fill="white")
+          d.arc((168,168,856,856),start=190,end=315,fill=(180,230,255,180),width=20)
+          im.save("assets/SupaUpdater.png",optimize=True)
+          im.save("assets/SupaUpdater.ico",format="ICO",sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          '@ | python -
       - name: Run tests
         run: python -m unittest discover -s tests -v
       - name: Build Windows executable
