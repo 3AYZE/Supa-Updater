@@ -21,9 +21,10 @@ PALETTES={'Light':('#f3f5f9','#ffffff','#182438','#657287','#1769cf','#dce3ec','
 class SupaUpdater(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('SupaUpdater — Software updates')
-        self.geometry('1180x760'); self.minsize(880,560)
+        self.title('SupaUpdater')
+        self.geometry('1120x740'); self.minsize(860,580)
         self.configure(bg=BG)
+        self._apply_app_icon()
         self.events=queue.Queue(); self.updates={}; self.registry=[]; self.drivers=[]; self.driver_scanning=False; self.driver_offers=[]; self.driver_selected=set(); self.driver_busy=False
         self.theme_choice=tk.StringVar(value=load_settings().get('theme','System'))
         self.busy=False; self.self_busy=False; self.stop=False; self.filter=tk.StringVar(value='All updates')
@@ -37,23 +38,23 @@ class SupaUpdater(tk.Tk):
         s.configure('TScrollbar',background='#cbd5e1')
         self.sidebar=tk.Frame(self,bg='#e9eef6',width=210);self.sidebar.pack(side='left',fill='y');self.sidebar.pack_propagate(False)
         tk.Label(self.sidebar,text='SupaUpdater',font=('Segoe UI',19,'bold'),bg='#e9eef6',fg=TEXT).pack(anchor='w',padx=19,pady=(26,5))
-        tk.Label(self.sidebar,text='SOFTWARE MANAGER',font=('Segoe UI',8,'bold'),bg='#e9eef6',fg=MUTED).pack(anchor='w',padx=21,pady=(0,28))
+        tk.Label(self.sidebar,text='SOFTWARE & DRIVER UPDATES',font=('Segoe UI',8,'bold'),bg='#e9eef6',fg=MUTED).pack(anchor='w',padx=21,pady=(0,28))
         self.nav={}
-        for label in ('Updates','Driver updates','Installed apps','Activity','App updates','Settings'):
+        for label in ('Updates','Activity','Settings'):
             b=tk.Button(self.sidebar,text='   '+label,anchor='w',font=('Segoe UI',11),relief='flat',bd=0,padx=16,pady=13,command=lambda x=label:self.show_page(x))
             b.pack(fill='x',padx=10,pady=3);self.nav[label]=b
         tk.Label(self.sidebar,text='Free • Local software updater',bg='#e9eef6',fg=MUTED,font=('Segoe UI',9),wraplength=175).pack(side='bottom',pady=22)
         self.main=tk.Frame(self,bg=BG);self.main.pack(side='left',fill='both',expand=True,padx=28,pady=24)
         top=tk.Frame(self.main,bg=BG);top.pack(fill='x')
         self.heading=tk.Label(top,text='Available updates',font=('Segoe UI',23,'bold'),bg=BG,fg=TEXT);self.heading.pack(side='left')
-        self.scanbtn=tk.Button(top,text='⟳  Scan for updates',command=self.scan,bg=BLUE,fg='white',activebackground='#1359b2',activeforeground='white',relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=10,cursor='hand2');self.scanbtn.pack(side='right')
-        self.selfupdatebtn=tk.Button(top,text='Check SupaUpdater updates',command=lambda:self.show_page('App updates'),bg=WHITE,fg=BLUE,relief='solid',bd=1,font=('Segoe UI',10,'bold'),padx=12,pady=10,cursor='hand2');self.selfupdatebtn.pack(side='right',padx=(0,10))
-        self.subtitle=tk.Label(self.main,text='Choose which applications to update.',font=('Segoe UI',10),bg=BG,fg=MUTED);self.subtitle.pack(anchor='w',pady=(2,17))
+        self.scanbtn=tk.Button(top,text='Scan software',command=self.scan,bg=BLUE,fg='white',activebackground='#1359b2',activeforeground='white',relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=10,cursor='hand2');self.scanbtn.pack(side='right')
+        self.selfupdatebtn=tk.Button(top,text='Driver updates',command=lambda:self.show_page('Driver updates'),bg=WHITE,fg=BLUE,relief='solid',bd=1,font=('Segoe UI',10,'bold'),padx=12,pady=10,cursor='hand2');self.selfupdatebtn.pack(side='right',padx=(0,10))
+        self.subtitle=tk.Label(self.main,text='Select the updates you want, then install them.',font=('Segoe UI',10),bg=BG,fg=MUTED);self.subtitle.pack(anchor='w',pady=(2,17))
         self.stats=tk.Label(self.main,text='Run a scan to find available updates.',font=('Segoe UI',10,'bold'),bg=BG,fg=TEXT);self.stats.pack(anchor='w',pady=(0,15))
         toolbar=tk.Frame(self.main,bg=BG);toolbar.pack(fill='x',pady=(0,12))
         self.search=tk.Entry(toolbar,textvariable=self.query,font=('Segoe UI',11),bg=WHITE,fg=TEXT,relief='solid',bd=1,highlightthickness=0)
         self.search.pack(side='left',fill='x',expand=True,ipady=8)
-        self.filterbox=ttk.Combobox(toolbar,textvariable=self.filter,values=('All updates','Selected only','WinGet','Other sources'),state='readonly',width=17,font=('Segoe UI',10))
+        self.filterbox=ttk.Combobox(toolbar,textvariable=self.filter,values=('All updates','Selected only'),state='readonly',width=17,font=('Segoe UI',10))
         self.filterbox.pack(side='left',padx=(10,0),ipady=6);self.filterbox.bind('<<ComboboxSelected>>',lambda e:self.refresh())
         selection=tk.Frame(self.main,bg=BG);selection.pack(fill='x',pady=(0,10))
         self.allbtn=tk.Button(selection,text='☐  Select all visible',command=self.select_all,bg=WHITE,fg=TEXT,relief='solid',bd=1,padx=12,pady=7,font=('Segoe UI',10));self.allbtn.pack(side='left')
@@ -67,8 +68,8 @@ class SupaUpdater(tk.Tk):
         self.table.pack(side='left',fill='both',expand=True);y.pack(side='right',fill='y')
         self.table.bind('<Button-1>',self.click_row)
         bottom=tk.Frame(self.main,bg=BG);bottom.pack(fill='x',pady=(10,12),before=container)
-        self.updatebtn=tk.Button(bottom,text='Update selected (0)',command=self.update_selected,bg=BLUE,fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=19,pady=11,state='disabled');self.updatebtn.pack(side='right')
-        self.updateallbtn=tk.Button(bottom,text='Update all available',command=self.update_all,bg='#176e47',fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=11,state='disabled');self.updateallbtn.pack(side='right',padx=(0,9))
+        self.updatebtn=tk.Button(bottom,text='Install selected (0)',command=self.update_selected,bg=BLUE,fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=19,pady=11,state='disabled');self.updatebtn.pack(side='right')
+        self.updateallbtn=tk.Button(bottom,text='Install all available',command=self.update_all,bg='#176e47',fg=WHITE,relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=11,state='disabled');self.updateallbtn.pack(side='right',padx=(0,9))
         self.cancelbtn=tk.Button(bottom,text='Stop after current update',command=self.cancel,bg=WHITE,fg=TEXT,relief='solid',bd=1,padx=14,pady=10,state='disabled');self.cancelbtn.pack(side='right',padx=9)
         progress=tk.Frame(self.main,bg=WHITE,highlightbackground=BORDER,highlightthickness=1)
         progress.pack(fill='x',pady=(10,12),ipadx=12,ipady=9, before=container)
