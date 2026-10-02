@@ -42,15 +42,42 @@ def apply_executable(stage,target,parent_pid,restart=True):
             if backup.exists(): shutil.copy2(backup,target)
             raise
 
+def uninstall_application(target,parent_pid):
+    target=Path(target).resolve()
+    if target.name.lower()!='supaupdater.exe': raise ValueError('Invalid SupaUpdater uninstall target')
+    parent=target.parent
+    for attempt in range(20):
+        try:
+            target.unlink(missing_ok=True)
+            break
+        except PermissionError:
+            if attempt==19: raise
+            time.sleep(1)
+    for name in ('SupaUpdaterUpdateHelper.exe','SupaUpdater.previous.exe'):
+        path=parent/name
+        if path.name.lower()!='supaupdaterupdatehelper.exe':
+            path.unlink(missing_ok=True)
+    # The helper cannot delete its own executable while running. Schedule that
+    # final cleanup through cmd after this process exits.
+    helper=parent/'SupaUpdaterUpdateHelper.exe'
+    if helper.exists():
+        flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
+        subprocess.Popen(['cmd.exe','/d','/c','ping 127.0.0.1 -n 3 >nul & del /f /q "'+str(helper)+'"'],creationflags=flags,close_fds=True)
+
 def main():
-    stage,target,pid=sys.argv[1],sys.argv[2],int(sys.argv[3]); mode=sys.argv[4] if len(sys.argv)>4 else 'source'
-    if os.name!='nt': raise RuntimeError('Self-update helper only runs on Windows')
+    if os.name!='nt': raise RuntimeError('SupaUpdater helper only runs on Windows')
+    uninstall_mode=len(sys.argv)>1 and sys.argv[1]=='--uninstall'
+    if uninstall_mode:
+        target,pid=sys.argv[2],int(sys.argv[3])
+    else:
+        stage,target,pid=sys.argv[1],sys.argv[2],int(sys.argv[3]); mode=sys.argv[4] if len(sys.argv)>4 else 'source'
     import ctypes
     kernel=ctypes.windll.kernel32; handle=kernel.OpenProcess(0x00100000,False,pid)
     if handle:
         result=kernel.WaitForSingleObject(handle,120000); kernel.CloseHandle(handle)
         if result!=0: raise TimeoutError('Main application did not exit')
-    apply_executable(stage,target,pid) if mode=='exe' else apply_stage(stage,target,pid)
+    if uninstall_mode: uninstall_application(target,pid)
+    else: apply_executable(stage,target,pid) if mode=='exe' else apply_stage(stage,target,pid)
 
 if __name__=='__main__':
     try: main()
