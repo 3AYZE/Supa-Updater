@@ -18,7 +18,7 @@ class App:
     source: str = ''
     publisher: str = ''
     location: str = ''
-    status: str = 'Installed (update unknown)'
+    status: str = 'Installed (update unknown)'\n    publisher_url: str = ''
 
 
 def registry_apps():
@@ -41,7 +41,7 @@ def registry_apps():
                                 except OSError: return ''
                             name = val('DisplayName')
                             if name and not val('SystemComponent') == '1':
-                                found.append(App(name=name, installed=val('DisplayVersion'),publisher=val('Publisher'),location=val('InstallLocation')))
+                                found.append(App(name=name, installed=val('DisplayVersion'),publisher=val('Publisher'),location=val('InstallLocation'),publisher_url=val('URLUpdateInfo') or val('URLInfoAbout')))
                     except OSError: continue
     return found
 
@@ -158,3 +158,17 @@ def update_one(app: App, confirm: bool=False, timeout=1800, verify=True):
     if state == 'still_available':
         return False, 'Unverified: WinGet still offers this update after installation.'
     return False, 'Installer exited successfully, but version could not be verified: ' + detail
+
+def official_software_links(apps):
+    """Return verified HTTPS URLs advertised by each app's uninstall registry entry.
+    These are informational only and cannot authorize silent installation."""
+    from urllib.parse import urlparse
+    result=[]
+    for app in apps:
+        raw=(app.publisher_url or '').strip()
+        try:
+            parsed=urlparse(raw)
+            valid=parsed.scheme=='https' and bool(parsed.hostname) and not parsed.username and not parsed.password and not parsed.port
+        except ValueError:valid=False
+        if valid:result.append({'name':app.name,'installed':app.installed,'publisher':app.publisher,'url':raw,'status':'Publisher-provided link; update availability unverified'})
+    return result
