@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from storage import load_settings, save_settings, record_result, read_history, HISTORY
 import tkinter as tk
 from tkinter import ttk, messagebox
-from engine import inventory, update_one, LOG
+from engine import inventory, update_one, official_software_links, LOG
 from driver_scan import scan_drivers, vendor_support
 from windows_updates import find_driver_updates, install_driver_update
 
@@ -47,6 +47,7 @@ class SupaUpdater(tk.Tk):
         self.main=tk.Frame(self,bg=BG);self.main.pack(side='left',fill='both',expand=True,padx=28,pady=24)
         top=tk.Frame(self.main,bg=BG);top.pack(fill='x')
         self.heading=tk.Label(top,text='Available updates',font=('Segoe UI',23,'bold'),bg=BG,fg=TEXT);self.heading.pack(side='left')
+        self.officialbtn=tk.Button(top,text='Official software sources',command=self.show_official_software_sources,bg=WHITE,fg=BLUE,relief='solid',bd=1,font=('Segoe UI',9),padx=10,pady=9);self.officialbtn.pack(side='right',padx=(0,8))
         self.scanbtn=tk.Button(top,text='Scan software',command=self.scan,bg=BLUE,fg='white',activebackground='#1359b2',activeforeground='white',relief='flat',font=('Segoe UI',10,'bold'),padx=17,pady=10,cursor='hand2');self.scanbtn.pack(side='right')
         self.selfupdatebtn=tk.Button(top,text='Driver updates',command=lambda:self.show_page('Driver updates'),bg=WHITE,fg=BLUE,relief='solid',bd=1,font=('Segoe UI',10,'bold'),padx=12,pady=10,cursor='hand2');self.selfupdatebtn.pack(side='right',padx=(0,10))
         self.subtitle=tk.Label(self.main,text='Select the updates you want, then install them.',font=('Segoe UI',10),bg=BG,fg=MUTED);self.subtitle.pack(anchor='w',pady=(2,17))
@@ -205,6 +206,26 @@ class SupaUpdater(tk.Tk):
     def check_theme(self):
         if self.theme_choice.get()=='System' and self.system_theme()!=getattr(self,'_last_theme',None):self.apply_theme()
         self.after(2500,self.check_theme)
+
+    def show_official_software_sources(self):
+        import webbrowser
+        links=official_software_links(self.registry)
+        window=tk.Toplevel(self);window.title('Official software sources');window.geometry('750x480');window.configure(bg=BG)
+        tk.Label(window,text='Publisher update links',font=('Segoe UI',17,'bold'),bg=BG,fg=TEXT).pack(anchor='w',padx=18,pady=(16,4))
+        tk.Label(window,text='Links supplied by installed software. They are not proof that an update exists. Select a row to open its publisher page.',bg=BG,fg=MUTED,wraplength=700,justify='left').pack(anchor='w',padx=18,pady=(0,12))
+        table=ttk.Treeview(window,columns=('app','publisher','version'),show='headings',style='Apps.Treeview')
+        for key,width in [('app',310),('publisher',220),('version',110)]:
+            table.heading(key,text=key.title());table.column(key,width=width,stretch=key=='app')
+        table.pack(fill='both',expand=True,padx=18,pady=(0,12))
+        for i,a in enumerate(links):table.insert('','end',iid=str(i),values=(a['name'],a['publisher'],a['installed']))
+        def open_link():
+            selected=table.selection()
+            if not selected:return
+            item=links[int(selected[0])]
+            if messagebox.askyesno('Open publisher link',f"Open the publisher-provided page for {item['name']}?\n\n{item['url']}"):
+                webbrowser.open(item['url'])
+        table.bind('<Double-1>',lambda event:open_link())
+        tk.Button(window,text='Open selected publisher page',command=open_link,bg=BLUE,fg=WHITE,padx=14,pady=9).pack(anchor='e',padx=18,pady=(0,14))
 
     def show_settings(self):
         if not hasattr(self,'settings_frame'):
