@@ -12,7 +12,7 @@ from storage import load_settings, save_settings, record_result, read_history, H
 import tkinter as tk
 from tkinter import ttk, messagebox
 from engine import inventory, update_one, LOG
-from driver_scan import scan_drivers
+from driver_scan import scan_drivers, vendor_support
 from windows_updates import find_driver_updates, install_driver_update
 
 BG='#f3f5f9'; WHITE='#ffffff'; TEXT='#182438'; MUTED='#657287'; BLUE='#1769cf'; BORDER='#dce3ec'
@@ -223,7 +223,7 @@ class SupaUpdater(tk.Tk):
             self.driver_scan_btn=tk.Button(bar,text='Scan installed drivers',command=self.start_driver_scan,bg=BLUE,fg='white',padx=10,pady=8);self.driver_scan_btn.pack(side='left')
             self.driver_offer_btn=tk.Button(bar,text='Check driver updates',command=self.check_driver_offers,bg=BLUE,fg='white',padx=10,pady=8);self.driver_offer_btn.pack(side='left',padx=8)
             tk.Button(bar,text='Windows optional updates',command=self.open_driver_updates,bg=WHITE,fg=TEXT,padx=10,pady=8).pack(side='left')
-            self.driver_note=tk.StringVar(value='Scan for optional drivers. Only Windows Update driver packages can be installed here.')
+            self.driver_note=tk.StringVar(value='Windows Update checks available driver offers. Double-click an installed driver to open its official manufacturer support page; no update is assumed.')
             tk.Label(self.driver_frame,textvariable=self.driver_note,bg=BG,fg=MUTED,anchor='w',wraplength=730,justify='left').pack(fill='x',pady=8)
             tk.Label(self.driver_frame,text='Available driver updates',font=('Segoe UI',13,'bold'),bg=BG,fg=TEXT).pack(anchor='w')
             actions=tk.Frame(self.driver_frame,bg=BG);actions.pack(fill='x',pady=6)
@@ -243,11 +243,27 @@ class SupaUpdater(tk.Tk):
             scroll=ttk.Scrollbar(table_area,orient='vertical',command=self.driver_table.yview)
             self.driver_table.configure(yscrollcommand=scroll.set)
             self.driver_table.pack(side='left',fill='both',expand=True);scroll.pack(side='right',fill='y')
+            self.driver_table.bind('<Double-1>',self.open_selected_driver_vendor)
+            tk.Button(self.driver_frame,text='Open official manufacturer support',command=self.open_selected_driver_vendor,bg=WHITE,fg=BLUE,padx=12,pady=7).pack(anchor='w',pady=(6,0))
         self.driver_frame.pack(fill='both',expand=True,after=self.subtitle)
         self.driver_table.delete(*self.driver_table.get_children())
         for i,d in enumerate(self.drivers):self.driver_table.insert('','end',iid=str(i),values=(d['category'],d['name'],d['version'],d['provider'],d['date']))
         self.render_driver_offers()
         self.apply_theme()
+
+    def open_selected_driver_vendor(self,event=None):
+        import webbrowser
+        if not hasattr(self,'driver_table'):return
+        selected=self.driver_table.selection()
+        if not selected:
+            messagebox.showinfo('Select a driver','Select an installed driver first.');return
+        try:driver=self.drivers[int(selected[0])]
+        except (IndexError,ValueError):return
+        info=vendor_support(driver)
+        if not info['url']:
+            messagebox.showinfo('Manufacturer not identified','No verified manufacturer support link is available for this device. Use Device Manager or the computer manufacturer support page.');return
+        if messagebox.askyesno('Official manufacturer support',f"{driver['name']}\n\nManufacturer: {info['vendor']}\n\nSupaUpdater has not verified that a newer compatible driver exists. Open the official support page?"):
+            webbrowser.open(info['url'])
 
     def render_driver_offers(self):
         if not hasattr(self,'driver_offers_table'):return
