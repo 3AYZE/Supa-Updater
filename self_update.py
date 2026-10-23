@@ -6,7 +6,7 @@ import tempfile
 import urllib.request
 import zipfile
 
-VERSION = '1.7.0'
+VERSION = '1.8.0'
 DEFAULT_REPO = '3AYZE/Supa-Updater'
 MAX_ARCHIVE = 20 * 1024 * 1024
 ALLOWED = {'app.pyw','engine.py','self_update.py','update_helper.py','README.md','storage.py','version.json','driver_scan.py','windows_updates.py'}
